@@ -9,7 +9,7 @@ end
 ### Main program
 ###
 
-#api_key = "api_key_goes_here";
+api_key = "api_key_here";
 
 #
 # Process command line options
@@ -154,6 +154,7 @@ end
 if pid
    plk, user = plurk.getPlurk(pid)
    puts "#{user.nick_name} #{plk.to_s}"
+   plurk.getResponses(plk).responses.each { |response| puts "    " + plk.friends[response.user_id.to_s].display_name + " " + response.to_s }
 end
 
 ###
