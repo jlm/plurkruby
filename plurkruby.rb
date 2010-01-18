@@ -102,10 +102,23 @@ class PlurkApi
       obj = call_api('/Timeline/getPlurk', '&plurk_id=' + pid.to_s)
       [ Plurk.new(obj["plurk"]), UserInfo.new(obj["user"]) ]
    end
+
+   def getResponses(plk, offset = 0)
+     raise "not logged in" unless @logged_in
+     obj = call_api('/Responses/get', '&plurk_id=' + plk.plurk_id.to_s + '&from_response=' + offset.to_s)
+     # Modify the incoming plurk by adding the responses, and the user_info about the responders, to it.
+     # Responses are recorded as though they were plurks.  Maybe Responses and plurks should be a subclass of something else.
+     # Responses are put into an array in the order received.  Friends are put in a hash, indexed by their uid.
+     obj['responses'].each { |response| plk.responses << Plurk.new(response) }
+     obj['friends'].each { |uid, frd| plk.friends[uid] = UserInfo.new(frd) }
+     plk.response_count = obj['response_count'].to_s; # update the response count in the plurk
+     plk
+   end
+
 end
 
 class UserInfo
-   attr_accessor :timezone, :karma, :id, :gender, :uid, :relationship, :recruited, :avatar, :nick_name, :date_of_birth, :display_name, :full_name, :location
+   attr_reader :timezone, :karma, :id, :gender, :uid, :relationship, :recruited, :avatar, :nick_name, :date_of_birth, :full_name, :location
 
    def initialize(json)
       @has_profile_image        = json["has_profile_image"]
@@ -125,6 +138,10 @@ class UserInfo
       if ($debug > 1)
         print "UserInfo.new says: I made this! ";
 	p self
+     end
+
+     def display_name           # Return either the Display name, if set, or else the nickname
+        @display_name ? @display_name : @nick_name
      end
    end
 
@@ -202,7 +219,8 @@ class PublicProfile < OwnProfile
 end
 
 class Plurk
-   attr_accessor :plurk_id, :content_raw, :qualifier, :limited_to, :owner_id, :no_comments, :content, :plurk_type, :lang, :responses_seen, :user_id, :posted, :favorite, :response_count
+   attr_reader :plurk_id, :content_raw, :qualifier, :limited_to, :owner_id, :no_comments, :content, :plurk_type, :lang, :responses_seen, :user_id, :posted, :favorite
+   attr_accessor :responses, :response_count, :friends # these are filled in by getResponses
 
    def initialize(json)
       @plurk_id                 = json["plurk_id"]
@@ -221,6 +239,8 @@ class Plurk
       @posted                   = json["posted"]
       @favorite                 = json["favorite"]
       @response_count           = json["response_count"]
+      @friends                  = {}                        # expected to be filled in by getResponses
+      @responses                = []                        # expected to be filled in by getResponses
       if ($debug > 2)
         print "Plurk.new says: I made this! ";
 	p self
@@ -261,7 +281,7 @@ class Plurk
 
    def to_s
       str = self.qualifier.to_s + " " + self.content_raw
-      str += " [#{self.responses_seen}/#{self.response_count}]"
+      str += " [#{self.responses_seen}/#{self.response_count}]" if self.responses_seen
       str += " [unread]" if self.is_unread?
       str += " [PP]" if self.is_private?
       str
