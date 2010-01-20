@@ -71,7 +71,7 @@ class PlurkApi
       PublicProfile.new( obj )
    end
 
-   def plurkAdd(qualifier, content, limited_to=nil, no_comments=nil, lang=nil)
+   def plurkAdd(content, qualifier, limited_to=nil, no_comments=nil, lang=nil)
       raise "not logged in" unless @logged_in
       paramstr = '&content=' + URI::escape(content) + '&qualifier=' + URI::escape(qualifier)
       paramstr = paramstr + '&limited_to=' + URI::escape(JSON.generate(limited_to)) if limited_to
@@ -115,6 +115,13 @@ class PlurkApi
      plk
    end
 
+   def responseAdd(plk, content, qualifier)
+     raise "not logged in" unless @logged_in
+     pid = plk.respond_to?('plurk_id') ? plk.plurk_id : plk.to_i
+     paramstr = '&plurk_id=' + pid.to_s
+     paramstr += '&content=' + URI::escape(content) + '&qualifier=' + URI::escape(qualifier)
+     call_api('/Responses/responseAdd', paramstr)
+   end
 end
 
 class UserInfo

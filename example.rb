@@ -1,3 +1,4 @@
+require 'rubygems'
 require 'plurkruby'
 require 'highline/import'
 
@@ -24,7 +25,9 @@ opts = GetoptLong.new(
   [ '--nodata',           GetoptLong::NO_ARGUMENT ],
   [ '--printplurks',      GetoptLong::NO_ARGUMENT ],
   [ '--outfile',    '-o', GetoptLong::REQUIRED_ARGUMENT ],
+  [ '--plurk_id',         GetoptLong::REQUIRED_ARGUMENT ],
   [ '--addplurk',   '-a', GetoptLong::REQUIRED_ARGUMENT ],
+  [ '--addresponse',      GetoptLong::REQUIRED_ARGUMENT ],
   [ '--qual',       '-q', GetoptLong::REQUIRED_ARGUMENT ],
   [ '--private',    '-p', GetoptLong::NO_ARGUMENT ],
   [ '--delete',     '-r', GetoptLong::REQUIRED_ARGUMENT ],
@@ -42,6 +45,8 @@ infilename = nil
 outfilename = nil
 qualifier = nil
 addplurk = nil
+addresponse = nil
+plurk_id = nil
 private = nil
 deleteplurk = nil
 nodata = nil
@@ -78,6 +83,10 @@ opts.each do |opt, arg|
       deleteplurk = arg.to_s
     when '--addplurk'
       addplurk = arg.to_s
+    when '--addresponse'
+      addresponse = arg.to_s
+    when '--plurk_id'
+      plurk_id = arg.to_s
     when '--qual'
       qualifier = arg.to_s
     when '--outfile'
@@ -151,10 +160,19 @@ end
 ###
 ### Get info on a specific plurk
 ###
+pid = plurk_id.to_s if plurk_id
 if pid
    plk, user = plurk.getPlurk(pid)
    puts "#{user.nick_name} #{plk.to_s}"
    plurk.getResponses(plk).responses.each { |response| puts "    " + plk.friends[response.user_id.to_s].display_name + " " + response.to_s }
+end
+
+###
+### Add a response to a specified plurk
+###
+if addresponse
+   qualifier = ':' if ! qualifier
+   plurk.responseAdd(plk, addresponse, qualifier)
 end
 
 ###
@@ -170,7 +188,7 @@ if addplurk
       limit = nil
    end
    if true
-      newplk = plurk.plurkAdd(qualifier, addplurk, limit)
+      newplk = plurk.plurkAdd(addplurk, qualifier, limit)
       puts "Plurked with id: #{newplk.plurk_id}"
    end
 end
