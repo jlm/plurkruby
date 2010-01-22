@@ -122,6 +122,14 @@ class PlurkApi
      paramstr += '&content=' + URI::escape(content) + '&qualifier=' + URI::escape(qualifier)
      call_api('/Responses/responseAdd', paramstr)
    end
+
+   def responseDelete(rsp, plk)
+     raise "not logged in" unless @logged_in
+     pid = plk.respond_to?('plurk_id') ? plk.plurk_id : plk.to_i
+     rid = rsp.respond_to?('plurk_id') ? rsp.plurk_id : rsp.to_i
+     paramstr = '&response_id=' + rid.to_s + '&plurk_id=' + pid.to_s
+     call_api('/Responses/responseDelete', paramstr)
+   end
 end
 
 class UserInfo
