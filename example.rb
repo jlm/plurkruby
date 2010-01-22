@@ -10,7 +10,8 @@ end
 ### Main program
 ###
 
-api_key = "api_key_here";
+# apikey.rb contains a single line like $api_key = "your API key goes here"
+load 'apikey.rb'
 
 #
 # Process command line options
@@ -111,7 +112,7 @@ logfile = outfilename ? File.new(outfilename, 'w') : nil
 ###
 ### Initialise the API
 ###
-plurk = PlurkApi.new(api_key, logfile)           # logfile can be omitted if not required
+plurk = PlurkApi.new($api_key, logfile)           # logfile can be omitted if not required
 
 ###
 ### Login and retrieve some basic information
