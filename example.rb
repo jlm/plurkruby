@@ -177,7 +177,7 @@ end
 ###
 if addresponse
    qualifier = ':' if ! qualifier
-   puts "Response " + plurk.responseAdd(plk, addresponse, qualifier).id.to_s + " added"
+   puts "Response " + plurk.responseAdd(plk, addresponse, qualifier).resp_id.to_s + " added"
 end
 
 ###
