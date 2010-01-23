@@ -30,6 +30,7 @@ opts = GetoptLong.new(
   [ '--addplurk',   '-a', GetoptLong::REQUIRED_ARGUMENT ],
   [ '--addresponse',      GetoptLong::REQUIRED_ARGUMENT ],
   [ '--qual',       '-q', GetoptLong::REQUIRED_ARGUMENT ],
+  [ '--delresponse',      GetoptLong::REQUIRED_ARGUMENT ],
   [ '--private',    '-p', GetoptLong::NO_ARGUMENT ],
   [ '--delete',     '-r', GetoptLong::REQUIRED_ARGUMENT ],
   [ '--not',        '-n', GetoptLong::NO_ARGUMENT ],
@@ -48,6 +49,7 @@ qualifier = nil
 addplurk = nil
 addresponse = nil
 plurk_id = nil
+delresponse = nil
 private = nil
 deleteplurk = nil
 nodata = nil
@@ -90,6 +92,8 @@ opts.each do |opt, arg|
       plurk_id = arg.to_s
     when '--qual'
       qualifier = arg.to_s
+    when '--delresponse'
+      delresponse = arg.to_s
     when '--outfile'
       outfilename = arg.to_s
     when '--logout'
@@ -173,7 +177,14 @@ end
 ###
 if addresponse
    qualifier = ':' if ! qualifier
-   plurk.responseAdd(plk, addresponse, qualifier)
+   puts "Response " + plurk.responseAdd(plk, addresponse, qualifier).id.to_s + " added"
+end
+
+###
+### Delete a response from a specified plurk
+###
+if delresponse
+   plurk.responseDelete(delresponse, plk)
 end
 
 ###
