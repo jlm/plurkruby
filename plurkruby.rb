@@ -109,7 +109,7 @@ class PlurkApi
      # Modify the incoming plurk by adding the responses, and the user_info about the responders, to it.
      # Responses are recorded as though they were plurks.  Maybe Responses and plurks should be a subclass of something else.
      # Responses are put into an array in the order received.  Friends are put in a hash, indexed by their uid.
-     obj['responses'].each { |response| plk.responses << Plurk.new(response) }
+     obj['responses'].each { |response| plk.responses << Response.new(response) }
      obj['friends'].each { |uid, frd| plk.friends[uid] = UserInfo.new(frd) }
      plk.response_count = obj['response_count'].to_s; # update the response count in the plurk
      plk
@@ -120,13 +120,13 @@ class PlurkApi
      pid = plk.respond_to?('plurk_id') ? plk.plurk_id : plk.to_i
      paramstr = '&plurk_id=' + pid.to_s
      paramstr += '&content=' + URI::escape(content) + '&qualifier=' + URI::escape(qualifier)
-     call_api('/Responses/responseAdd', paramstr)
+     Response.new(call_api('/Responses/responseAdd', paramstr))
    end
 
    def responseDelete(rsp, plk)
      raise "not logged in" unless @logged_in
+     rid = rsp.respond_to?('resp_id') ? rsp.resp_id : rsp.to_i
      pid = plk.respond_to?('plurk_id') ? plk.plurk_id : plk.to_i
-     rid = rsp.respond_to?('plurk_id') ? rsp.plurk_id : rsp.to_i
      paramstr = '&response_id=' + rid.to_s + '&plurk_id=' + pid.to_s
      call_api('/Responses/responseDelete', paramstr)
    end
@@ -233,31 +233,21 @@ class PublicProfile < OwnProfile
   end
 end
 
-class Plurk
-   attr_reader :plurk_id, :content_raw, :qualifier, :limited_to, :owner_id, :no_comments, :content, :plurk_type, :lang, :responses_seen, :user_id, :posted, :favorite
-   attr_accessor :responses, :response_count, :friends # these are filled in by getResponses
+class PlurkBase
+   attr_reader :plurk_id, :content_raw, :qualifier, :content, :lang, :user_id, :posted
 
    def initialize(json)
       @plurk_id                 = json["plurk_id"]
       @content_raw              = json["content_raw"]
       @qualifier                = json["qualifier"]
-      @limited_to               = json["limited_to"]
-      @owner_id                 = json["owner_id"]
-      @no_comments              = json["no_comments"]
-      @content                  = json["content"]
-      @plurk_type               = json["plurk_type"]
       @lang                     = json["lang"]
       # Can't work out if responses_seen is ever non-zero
       @responses_seen           = json["responses_seen"]
       @is_unread                = json["is_unread"]
       @user_id                  = json["user_id"]
       @posted                   = json["posted"]
-      @favorite                 = json["favorite"]
-      @response_count           = json["response_count"]
-      @friends                  = {}                        # expected to be filled in by getResponses
-      @responses                = []                        # expected to be filled in by getResponses
       if ($debug > 2)
-        print "Plurk.new says: I made this! ";
+        print "PlurkBase.new says: I made this! ";
 	p self
      end
    end
@@ -296,9 +286,53 @@ class Plurk
 
    def to_s
       str = self.qualifier.to_s + " " + self.content_raw
+      str
+   end
+end
+
+class Plurk < PlurkBase
+   attr_reader :limited_to, :no_comments, :plurk_type, :owner_id, :responses_seen, :favorite
+   attr_accessor :responses, :response_count, :friends # these are filled in by getResponses
+
+   def initialize(json)
+      super
+
+      @limited_to               = json["limited_to"]
+      @owner_id                 = json["owner_id"]
+      @no_comments              = json["no_comments"]
+      @content                  = json["content"]
+      @plurk_type               = json["plurk_type"]
+      @favorite                 = json["favorite"]
+      @response_count           = json["response_count"]
+      @friends                  = {}                        # expected to be filled in by getResponses
+      @responses                = []                        # expected to be filled in by getResponses
+      if ($debug > 2)
+        print "Plurk.new says: I made this! ";
+	p self
+     end
+   end
+
+   # The to_s method augments the base class' method by invoking it with super.
+   def to_s
+      str = super
+
       str += " [#{self.responses_seen}/#{self.response_count}]" if self.responses_seen
       str += " [unread]" if self.is_unread?
       str += " [PP]" if self.is_private?
       str
+   end
+end
+
+class Response < PlurkBase
+   attr_reader :id
+
+   def initialize(json)
+      super
+
+      @resp_id                  = json["id"]
+      if ($debug > 2)
+        print "Response.new says: I made this! ";
+	p self
+     end
    end
 end
