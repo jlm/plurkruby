@@ -5,6 +5,7 @@ class PlurkApi
    attr_reader :meta, :logged_in, :logstream, :unread_count, :unread_all, :unread_my, :unread_private, :unread_responded
 
    def initialize(api_key, logstream = nil)
+      $debug = 0 if not $debug
       @api_key = api_key
       @logstream = logstream
       @logged_in = nil
