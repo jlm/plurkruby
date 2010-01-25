@@ -1,5 +1,5 @@
 require 'json'
-require 'open-uri'
+require 'net/http'
 
 class PlurkApi
    attr_reader :meta, :logged_in, :logstream, :unread_count, :unread_all, :unread_my, :unread_private, :unread_responded
@@ -18,34 +18,28 @@ class PlurkApi
    def call_api(apipath, paramstr = '')
       uri = URI::HTTP.build({ :host => 'www.plurk.com', :path => '/API' + apipath,
             :query => 'api_key=' + @api_key + paramstr })
-      begin
-	 p uri if $printuri
-	 logstream.puts "Request: " + uri.to_s if logstream
-	 if $pretending
-	    puts "Only pretending"
-	    exit
-	 end
-	 if @logged_in
-            urifile = open(uri, "Cookie" => @cookie)
-	 else
-            urifile = open(uri)
-	 end
-      rescue OpenURI::HTTPError => e
-         puts "Request returned error #{e.message}"
-	 # Unfortunately, OpenURI doesn't allow you to read the body of the response if there's
-	 # an error, so absolutely no debug information is available. This may mean we have to
-	 # change to a different library.
-         exit
+      p uri if $printuri
+      logstream.puts "Request: " + uri.to_s if logstream
+      if $pretending
+	 puts "Only pretending"
+	 exit
       end
-      @meta = urifile.meta
-      $/ = nil # force the whole stream to be returned as a single line.
-      if logstream
-        response = urifile.gets
-	logstream.puts "Response: " + response
-        JSON.parse(response)
-      else
-        JSON.parse(urifile.gets)
-      end
+      # We use this method as we want to send a cookie
+      # Why does no documentation tell you you have to add the query yourself?
+      req = Net::HTTP::Get.new(uri.path + '?' + uri.query)
+      req.add_field('Cookie', @cookie) if @logged_in
+      res = Net::HTTP.start(uri.host, uri.port) { |http|
+         http.request(req)
+      }
+      # Login requests return a cookie that has to be sent with subsequent requests.  We save that cookie
+      # if we are not logged in, which is how we decide if there will be one.
+      @cookie = res['set-cookie'] if not @logged_in
+      logstream.puts "Response: " + res.body if logstream
+      obj = JSON.parse(res.body)
+      
+      raise obj['error_text'] if res.is_a? Net::HTTPBadRequest
+
+      obj
    end
 
    def login(username, password, no_data = nil)
@@ -53,7 +47,7 @@ class PlurkApi
       paramstr += '&no_data=1' if no_data
       obj = call_api('/Users/login', paramstr)
       @logged_in = true
-      @cookie = @meta['set-cookie'].split('; ',2)[0]
+      #@cookie = @meta['set-cookie'].split('; ',2)[0]
       p @cookie if $debug > 2
       if no_data
          nil
