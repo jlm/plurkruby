@@ -1,36 +1,49 @@
 require 'json'
 require 'net/http'
+require 'net/https'
 
 class PlurkApi
    attr_reader :meta, :logged_in, :logstream, :unread_count, :unread_all, :unread_my, :unread_private, :unread_responded
 
-   def initialize(api_key, logstream = nil)
+   def initialize(api_key, logstream = nil, certpath = nil)
       $debug = 0 if not $debug
       @api_key = api_key
       @logstream = logstream
       @logged_in = nil
+      @certpath = certpath
    end
 
    def is_logged_in?
       @logged_in
    end
 
-   def call_api(apipath, paramstr = '')
+   def call_api(apipath, paramstr = '', use_https = false)
       uri = URI::HTTP.build({ :host => 'www.plurk.com', :path => '/API' + apipath,
             :query => 'api_key=' + @api_key + paramstr })
+      if use_https
+         uri.scheme = 'https'
+         uri.port = 443
+      end
+      # We use this method as we want to send a cookie
+      # Why does no documentation tell you you have to add the query yourself?
+      httpobj = Net::HTTP.new(uri.host, uri.port)
+      httpobj.use_ssl = true if use_https
+      if @certpath and File.directory? @certpath
+	 httpobj.ca_path = @certpath
+	 httpobj.verify_mode = OpenSSL::SSL::VERIFY_PEER
+	 httpobj.verify_depth = 5
+      else
+         httpobj.verify_mode = OpenSSL::SSL::VERIFY_NONE
+      end
       p uri if $printuri
       logstream.puts "Request: " + uri.to_s if logstream
       if $pretending
 	 puts "Only pretending"
 	 exit
       end
-      # We use this method as we want to send a cookie
-      # Why does no documentation tell you you have to add the query yourself?
       req = Net::HTTP::Get.new(uri.path + '?' + uri.query)
       req.add_field('Cookie', @cookie) if @logged_in
-      res = Net::HTTP.start(uri.host, uri.port) { |http|
-         http.request(req)
-      }
+      res = httpobj.request(req)
       # Login requests return a cookie that has to be sent with subsequent requests.  We save that cookie
       # if we are not logged in, which is how we decide if there will be one.
       @cookie = res['set-cookie'] if not @logged_in
@@ -45,7 +58,7 @@ class PlurkApi
    def login(username, password, no_data = nil)
       paramstr = '&username=' + username + "&password=" + password 
       paramstr += '&no_data=1' if no_data
-      obj = call_api('/Users/login', paramstr)
+      obj = call_api('/Users/login', paramstr, :use_https => true)
       @logged_in = true
       #@cookie = @meta['set-cookie'].split('; ',2)[0]
       p @cookie if $debug > 2
