@@ -138,6 +138,15 @@ class PlurkApi
      paramstr = '&response_id=' + rid.to_s + '&plurk_id=' + pid.to_s
      call_api('/Responses/responseDelete', paramstr)
    end
+
+   def alertsGetActive
+     raise "not logged in" unless @logged_in
+     alerts = []
+     call_api('/Alerts/getActive').each { |obj|
+        alerts << Alert.new(obj)
+     }
+     alerts
+   end
 end
 
 class UserInfo
@@ -165,6 +174,10 @@ class UserInfo
 
      def display_name           # Return either the Display name, if set, or else the nickname
         @display_name ? @display_name : @nick_name
+     end
+
+     def to_s
+       self.display_name
      end
    end
 
@@ -342,5 +355,29 @@ class Response < PlurkBase
         print "Response.new says: I made this! ";
 	p self
      end
+   end
+end
+
+###
+### Alerts
+###
+
+class Alert
+   attr_reader :type, :user
+   def initialize(json)
+      @type                     = json["type"]
+      @user = UserInfo.new(case @type
+	   when "friendship_request"
+	      json["from_user"]
+	   when "friendship_pending"
+	      json["to_user"]
+	   when "new_fan"
+	      json["new_fan"]
+	   when "friendship_accepted"
+	      json["friend_info"]
+	   when "new_friend"
+	      json["new_friend"]
+	 end
+      )
    end
 end
