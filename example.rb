@@ -132,6 +132,10 @@ if do_login
   print " Private: " + plurk.unread_private.to_s
   print " Responded: " + plurk.unread_responded.to_s
   puts
+  puts "Active alerts:"
+  plurk.alertsGetActive.each { |alert|
+    puts "  #{alert.user.to_s}: #{alert.type}"
+  }
 end
 
 if username
