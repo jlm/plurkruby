@@ -25,6 +25,7 @@ opts = GetoptLong.new(
   [ '--testuser',   '-t', GetoptLong::NO_ARGUMENT ],
   [ '--nodata',           GetoptLong::NO_ARGUMENT ],
   [ '--printplurks',      GetoptLong::NO_ARGUMENT ],
+  [ '--getplurks',        GetoptLong::REQUIRED_ARGUMENT ],
   [ '--outfile',    '-o', GetoptLong::REQUIRED_ARGUMENT ],
   [ '--plurk_id',         GetoptLong::REQUIRED_ARGUMENT ],
   [ '--addplurk',   '-a', GetoptLong::REQUIRED_ARGUMENT ],
@@ -56,6 +57,7 @@ deleteplurk = nil
 alerthistory = nil
 nodata = nil
 printplurks = nil
+getplurks = nil
 logout = nil
 $bluffing = nil
 $debug = 0
@@ -80,6 +82,8 @@ opts.each do |opt, arg|
       nodata = true
     when '--printplurks'
       printplurks = true
+    when '--getplurks'
+      getplurks = arg.to_i
     when '--username'
       username = arg.to_s
     when '--private'
@@ -190,7 +194,25 @@ pid = plurk_id.to_s if plurk_id
 if pid
    plk, user = plurk.getPlurk(pid)
    puts "#{user.nick_name} #{plk.to_s}"
-   plurk.getResponses(plk).responses.each { |response| puts "    " + plk.friends[response.user_id.to_s].display_name + " " + response.to_s }
+   plurk.getResponses(plk).responses.each { |response|
+      puts "    " + plk.friends[response.user_id.to_s].display_name + " " + response.to_s
+   }
+end
+
+###
+### Polling
+###
+if getplurks
+   limit = 10
+   newer_than = Time.new.getutc - getplurks.to_i * 60 * 60
+   puts "#{limit.to_s} Plurks since #{newer_than.to_s}"
+   plurks, users = plurk.pollingGetPlurks(newer_than, limit)
+   plurks.each { |plk|
+      puts "#{users[plk.owner_id.to_s].display_name} #{plk.to_s}"
+      plurk.getResponses(plk).responses.each { |response|
+         puts "    " + plk.friends[response.user_id.to_s].display_name + " " + response.to_s
+      }
+   }
 end
 
 ###
