@@ -5,6 +5,11 @@ require 'net/https'
 class PlurkApi
    attr_reader :meta, :logged_in, :logstream, :unread_count, :unread_all, :unread_my, :unread_private, :unread_responded
 
+   TIMELINEGETPLURKS_ALL = nil
+   TIMELINEGETPLURKS_MINE = 'only_user'
+   TIMELINEGETPLURKS_PRIVATE = 'only_private'
+   TIMELINEGETPLURKS_RESPONDED = 'only_responded'
+
    def initialize(api_key, logstream = nil, certpath = nil)
       $debug = 0 if not $debug
       @api_key = api_key
@@ -112,6 +117,7 @@ class PlurkApi
       [ Plurk.new(obj["plurk"]), UserInfo.new(obj["user"]) ]
    end
 
+   # This is the preferred interface for getting groups of plurks, as it is more efficient in Plurk
    def pollingGetPlurks(newer_than, limit = nil)
       # newer_than can be a Time object, or an integer (no. of seconds since epoch), or a
       # string of format "2009-6-12T21:13:24".
@@ -124,6 +130,27 @@ class PlurkApi
       paramstr = '&offset=' + timestr
       paramstr += '&limit=' + limit.to_s if limit
       json = call_api('/Polling/getPlurks', paramstr)
+      plurk_users = Hash.new
+      json["plurk_users"].each { |id,obj| plurk_users[id] = UserInfo.new(obj) }
+      plurks = Array.new
+      json["plurks"].each { |obj| plurks << Plurk.new(obj) }
+      [ plurks, plurk_users ]
+   end
+
+   # This interface includes filtering but is less efficient than the "polling" interface above.
+   def timelineGetPlurks(newer_than, limit = nil, filter = nil)
+      # newer_than can be a Time object, or an integer (no. of seconds since epoch), or a
+      # string of format "2009-6-12T21:13:24".
+      raise "not logged in" unless @logged_in
+      if newer_than.is_a? String
+         timestr = newer_than
+      else
+	 timestr = Time.at(newer_than.to_i).getutc.strftime("%Y-%m-%dT%H:%M:%S")
+      end
+      paramstr = '&offset=' + timestr
+      paramstr += '&limit=' + limit.to_s if limit
+      paramstr += '&filter=' + filter.to_s if filter
+      json = call_api('/Timeline/getPlurks', paramstr)
       plurk_users = Hash.new
       json["plurk_users"].each { |id,obj| plurk_users[id] = UserInfo.new(obj) }
       plurks = Array.new
