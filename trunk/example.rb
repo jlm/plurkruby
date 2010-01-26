@@ -33,6 +33,8 @@ opts = GetoptLong.new(
   [ '--qual',       '-q', GetoptLong::REQUIRED_ARGUMENT ],
   [ '--delresponse',      GetoptLong::REQUIRED_ARGUMENT ],
   [ '--private',    '-p', GetoptLong::NO_ARGUMENT ],
+  [ '--mine',       '-m', GetoptLong::NO_ARGUMENT ],
+  [ '--responded',        GetoptLong::NO_ARGUMENT ],
   [ '--delete',     '-r', GetoptLong::REQUIRED_ARGUMENT ],
   [ '--alerthistory',     GetoptLong::NO_ARGUMENT ],
   [ '--not',        '-n', GetoptLong::NO_ARGUMENT ],
@@ -53,6 +55,8 @@ addresponse = nil
 plurk_id = nil
 delresponse = nil
 private = nil
+mine = nil
+responded = nil
 deleteplurk = nil
 alerthistory = nil
 nodata = nil
@@ -88,6 +92,10 @@ opts.each do |opt, arg|
       username = arg.to_s
     when '--private'
       private = true
+    when '--mine'
+      mine = true
+    when '--responded'
+      responded = true
     when '--delete'
       deleteplurk = arg.to_s
     when '--alerthistory'
@@ -200,15 +208,33 @@ if pid
 end
 
 ###
-### Polling
+### Polling and Timeline plurk retrieval
+###
+### note that the time parameter means "newer than" for the "Polling" interface but "older than" for the Timeline interface
 ###
 if getplurks
    limit = 10
    newer_than = Time.new.getutc - getplurks.to_i * 60 * 60
-   puts "#{limit.to_s} Plurks since #{newer_than.to_s}"
-   plurks, users = plurk.pollingGetPlurks(newer_than, limit)
+   older_than = newer_than
+   case
+      when mine
+	 # At present, 'only_user' doesn't work - known Plurk bug http://plurk.com/p/3aunsj
+	 plurks, users = plurk.timelineGetPlurks(older_than, limit, PlurkApi::TIMELINEGETPLURKS_MINE)
+         puts "#{limit.to_s} Plurks by #{loginname} before #{older_than.to_s}"
+      when private
+	 plurks, users = plurk.timelineGetPlurks(older_than, limit, PlurkApi::TIMELINEGETPLURKS_PRIVATE)
+         puts "#{limit.to_s} private Plurks before #{older_than.to_s}"
+      when responded
+	 plurks, users = plurk.timelineGetPlurks(older_than, limit, PlurkApi::TIMELINEGETPLURKS_RESPONDED)
+         puts "#{limit.to_s} responded Plurks before #{older_than.to_s}"
+      else
+         plurks, users = plurk.pollingGetPlurks(newer_than, limit)
+         puts "#{limit.to_s} Plurks since #{newer_than.to_s}"
+   end
+   # Print the plurk
    plurks.each { |plk|
       puts "#{users[plk.owner_id.to_s].display_name} #{plk.to_s}"
+      # Print the responses
       plurk.getResponses(plk).responses.each { |response|
          puts "    " + plk.friends[response.user_id.to_s].display_name + " " + response.to_s
       }
