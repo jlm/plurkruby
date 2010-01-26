@@ -33,6 +33,7 @@ opts = GetoptLong.new(
   [ '--delresponse',      GetoptLong::REQUIRED_ARGUMENT ],
   [ '--private',    '-p', GetoptLong::NO_ARGUMENT ],
   [ '--delete',     '-r', GetoptLong::REQUIRED_ARGUMENT ],
+  [ '--alerthistory',     GetoptLong::NO_ARGUMENT ],
   [ '--not',        '-n', GetoptLong::NO_ARGUMENT ],
   [ '--logout',           GetoptLong::NO_ARGUMENT ],
   [ '--printuri',   '-v', GetoptLong::NO_ARGUMENT ],
@@ -52,6 +53,7 @@ plurk_id = nil
 delresponse = nil
 private = nil
 deleteplurk = nil
+alerthistory = nil
 nodata = nil
 printplurks = nil
 logout = nil
@@ -84,6 +86,8 @@ opts.each do |opt, arg|
       private = true
     when '--delete'
       deleteplurk = arg.to_s
+    when '--alerthistory'
+      alerthistory = true
     when '--addplurk'
       addplurk = arg.to_s
     when '--addresponse'
@@ -134,7 +138,13 @@ if do_login
   puts
   puts "Active alerts:"
   plurk.alertsGetActive.each { |alert|
-    puts "  #{alert.user.to_s}: #{alert.type}"
+    puts "  #{alert.user.to_s}: #{alert.type} at #{alert.posted}"
+  if alerthistory
+    puts "Alert history:"
+    plurk.alertsGetHistory.each { |alert|
+      puts "  " + alert.to_s
+    }
+  end
   }
 end
 

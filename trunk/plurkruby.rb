@@ -147,6 +147,15 @@ class PlurkApi
      }
      alerts
    end
+
+   def alertsGetHistory
+     raise "not logged in" unless @logged_in
+     alerts = []
+     call_api('/Alerts/getHistory').each { |obj|
+        alerts << Alert.new(obj)
+     }
+     alerts
+   end
 end
 
 class UserInfo
@@ -363,9 +372,10 @@ end
 ###
 
 class Alert
-   attr_reader :type, :user
+   attr_reader :type, :user, :posted
    def initialize(json)
       @type                     = json["type"]
+      @posted                   = json["posted"]
       @user = UserInfo.new(case @type
 	   when "friendship_request"
 	      json["from_user"]
@@ -379,5 +389,9 @@ class Alert
 	      json["new_friend"]
 	 end
       )
+   end
+
+   def to_s
+      self.user.to_s + ": " + self.type + " at " + self.posted
    end
 end
