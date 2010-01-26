@@ -59,13 +59,14 @@ class PlurkApi
       paramstr = '&username=' + username + "&password=" + password 
       paramstr += '&no_data=1' if no_data
       obj = call_api('/Users/login', paramstr, :use_https => true)
+      #obj = call_api('/Users/login', paramstr)
       @logged_in = true
       #@cookie = @meta['set-cookie'].split('; ',2)[0]
       p @cookie if $debug > 2
       if no_data
          nil
       else
-         OwnProfile.new( obj )
+         OwnProfile.new(obj)
       end
    end
 
@@ -109,6 +110,25 @@ class PlurkApi
       # have to keep a user table.
       obj = call_api('/Timeline/getPlurk', '&plurk_id=' + pid.to_s)
       [ Plurk.new(obj["plurk"]), UserInfo.new(obj["user"]) ]
+   end
+
+   def pollingGetPlurks(newer_than, limit = nil)
+      # newer_than can be a Time object, or an integer (no. of seconds since epoch), or a
+      # string of format "2009-6-12T21:13:24".
+      raise "not logged in" unless @logged_in
+      if newer_than.is_a? String
+         timestr = newer_than
+      else
+	 timestr = Time.at(newer_than.to_i).getutc.strftime("%Y-%m-%dT%H:%M:%S")
+      end
+      paramstr = '&offset=' + timestr
+      paramstr += '&limit=' + limit.to_s if limit
+      json = call_api('/Polling/getPlurks', paramstr)
+      plurk_users = Hash.new
+      json["plurk_users"].each { |id,obj| plurk_users[id] = UserInfo.new(obj) }
+      plurks = Array.new
+      json["plurks"].each { |obj| plurks << Plurk.new(obj) }
+      [ plurks, plurk_users ]
    end
 
    def getResponses(plk, offset = 0)
