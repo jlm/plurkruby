@@ -156,6 +156,18 @@ class PlurkApi
      }
      alerts
    end
+
+   def getBlocks(offset = nil)
+     raise "not logged in" unless @logged_in
+     paramstr = offset ? '&offset=' + offset.to_s : ""
+     blockobj = call_api('/Blocks/get', paramstr)
+     nblocks = blockobj['total']
+     blocks = []
+     blockobj['users'].each { |obj|
+        blocks << UserInfo.new(obj)
+     }
+     [ nblocks, blocks ]
+   end
 end
 
 class UserInfo
