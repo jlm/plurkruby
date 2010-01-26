@@ -146,6 +146,13 @@ if do_login
     }
   end
   }
+  nblocks, blocks = plurk.getBlocks
+  if nblocks.to_i > 0
+    puts "Blocked users:"
+    blocks.each { |user|
+      puts "  #{user.to_s}"
+    }
+  end
 end
 
 if username
