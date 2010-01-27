@@ -6,6 +6,8 @@
 # This is not the approach taken in Plurkruby.  Instead, elements received from the server are translated into
 # native Ruby objects, either in code in the API implementation or in Class initializer methods.
 #
+# See PlurkApi for a description of the supported methods.
+#
 # Author::    John Messenger
 # Copyright:: Copyright (c) 2010 John Messenger
 # License::   New BSD License
@@ -56,7 +58,7 @@ class PlurkApi
       @certpath = certpath
    end
 
-   # If a successful call to +login+ has been made, this method will return +true+.
+   # If a successful call to login has been made (without a subsequent logout), this method will return +true+.
    def is_logged_in?
       @logged_in
    end
@@ -287,6 +289,12 @@ class PlurkApi
      plk
    end
 
+   # Plurk API call::	/API/Responses/responseAdd
+   # +plk+::		existing Plurk object (or numeric plurk id)
+   # +content+::	text of the response to be added
+   # +qualifier+::	the qualifier, such as "says".  Must be English.
+   # Adds a response to an existing plurk.  The +plk+ parameter can be an existing Plurk object or a numeric plurk id.
+   # Requires login.  The resulting Response object is returned.
    def responseAdd(plk, content, qualifier)
      raise "not logged in" unless @logged_in
      pid = plk.respond_to?('plurk_id') ? plk.plurk_id : plk.to_i
@@ -295,6 +303,10 @@ class PlurkApi
      Response.new(call_api('/Responses/responseAdd', paramstr))
    end
 
+   # Plurk API call::	/API/Responses/responseDelete
+   # +rsp+::		existing Response object (or numeric response id)
+   # +plk+::		existing Plurk object (or numeric plurk id)
+   # The response is deleted from the plurk.  Requires login.
    def responseDelete(rsp, plk)
      raise "not logged in" unless @logged_in
      rid = rsp.respond_to?('resp_id') ? rsp.resp_id : rsp.to_i
@@ -303,6 +315,8 @@ class PlurkApi
      call_api('/Responses/responseDelete', paramstr)
    end
 
+   # Plurk API call::	/API/Alerts/getActive
+   # Requires login.  Returns an array of active Alert objects.
    def alertsGetActive
      raise "not logged in" unless @logged_in
      alerts = []
@@ -312,6 +326,8 @@ class PlurkApi
      alerts
    end
 
+   # Plurk API call::	/API/Alerts/getActive
+   # Requires login.  Returns an array of historical Alert objects.  Only up to 30 events are available.
    def alertsGetHistory
      raise "not logged in" unless @logged_in
      alerts = []
@@ -321,6 +337,10 @@ class PlurkApi
      alerts
    end
 
+   # Plurk API call::	/API/Blocks/get
+   # +offset+::		If present, skips this many blocked users before starting to return entries.
+   # Requires login.  Returns a pair of entries.  Firstly, the number of users which have been blocked.
+   # Secondly, an array of UserInfo objects representing users which the logged-in user had blocked.
    def getBlocks(offset = nil)
      raise "not logged in" unless @logged_in
      paramstr = offset ? '&offset=' + offset.to_s : ""
