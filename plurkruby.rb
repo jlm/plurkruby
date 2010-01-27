@@ -77,7 +77,6 @@ class PlurkApi
    # The returned value is parsed as a JSON object, both in the case of a good and bad response code from the
    # server.  If the server said "400 BAD REQUEST", then the error text is raised as a run-time error.
    # The parsed JSON object is returned for further processing.
-   private :call_api
    def call_api(apipath, paramstr = '', use_https = false)
       uri = URI::HTTP.build({ :host => 'www.plurk.com', :path => '/API' + apipath,
             :query => 'api_key=' + @api_key + paramstr })
@@ -115,6 +114,7 @@ class PlurkApi
 
       obj
    end
+   private :call_api
 
    # Plurk API call::	/API/Users/login
    # +username+::	existing Plurk username
@@ -354,9 +354,38 @@ class PlurkApi
    end
 end
 
+# Several Plurk API calls return objects which represent Plurk users.  This class represents a Plurk user.
+# Because different calls fill in different information, it is wise not to assume everything has a value.
 class UserInfo
-   attr_reader :timezone, :karma, :id, :gender, :uid, :relationship, :recruited, :avatar, :nick_name, :date_of_birth, :full_name, :location
+   # The user's timezone.
+   attr_reader :timezone
+   # The user's current karma value.
+   attr_reader :karma
+   # It's not clear to me exactly what the difference is between id and uid.
+   attr_reader :id
+   # The user's gender. See constants |GENDER_FEMALE| and |GENDER_MALE|.
+   attr_reader :gender
+   # The user's plurk user-id.
+   attr_reader :uid
+   # A string describing the user's relationship status, e.g., "married".
+   attr_reader :relationship
+   # A count of the number of Plurk users this user has invited.
+   attr_reader :recruited
+   # A code representing the user's chosen Avatar.
+   attr_reader :avatar
+   # A string giving the user's login name.
+   attr_reader :nick_name
+   # The user's date of birth, if specified.
+   attr_reader :date_of_birth
+   # The user's full name.
+   attr_reader :full_name
+   # The user's location, if specified.
+   attr_reader :location
 
+   # json::		parsed object returned by the 'json' library representing user information.
+   # API calls such as getPlurk, getPlurks, etc., return objects representing a Plurk user. Calls like login,
+   # getOwnProfile, etc., return information which includes this.
+   # This method creates a new instance of UserInfo and fills in the details supplied.
    def initialize(json)
       @has_profile_image        = json["has_profile_image"]
       @timezone                 = json["timezone"]
@@ -377,10 +406,12 @@ class UserInfo
 	p self
      end
 
-     def display_name           # Return either the Display name, if set, or else the nickname
+     # Invoked on a UserInfo object, returns either the Display name, if set, or else the nickname.
+     def display_name
         @display_name ? @display_name : @nick_name
      end
 
+     # Another name for the display_name method; returns the Display name if set, or else the nickname.
      def to_s
        self.display_name
      end
@@ -394,14 +425,42 @@ class UserInfo
    HASPROFILEIMAGE_NO = 0
    HASPROFILEIMAGE_YES = 1
 
+   # Returns true if the user has uploaded a profile image.
    def has_profile_image?
      @has_profile_image == HASPROFILEIMAGE_YES
    end
 end
 
+# The login and getOwnProfile methods return information about a logged-in Plurk user, comprising a regular
+# UserInfo structure, some counts and privacy settings, and an array of recent Plurks, with information on who
+# Plurked them.  This class is wrongly structured; there should be a ProfileBase and then subclasses for both OwnProfile
+# and PublicProfile.
 class OwnProfile
-   attr_reader :unread_count, :plurks_users, :plurks, :user_info, :alerts_count, :privacy, :friends_count, :fans_count
+   # The total number of unread Plurks this user has.  This count is currently limited to 200.
+   attr_reader :unread_count
+   # The UserInfo structure associate with this user.
+   attr_reader :user_info
+   # A count of the active alerts pending for this user.
+   attr_reader :alerts_count
+   # The user's privacy settings.  See PROFILEPRIVACY_WORLD.
+   attr_reader :privacy
+   # A count of the user's Plurk friends.
+   attr_reader :friends_count
+   # A count of the user's Plurk fans.
+   attr_reader :fans_count
+   # An array of recent Plurks in this user's timeline.
+   attr_reader :plurks
+   # A hash, indexed by user_id, of the UserInfo structures of the owners of the Plurks in the plurks element.
+   attr_reader :plurks_users
 
+   # The values for @privacy
+   PROFILEPRIVACY_WORLD         = "world"
+   PROFILEPRIVACY_FRIENDS       = "only_friends"
+   PROFILEPRIVACY_ME            = "only_me"
+
+   # json::		parsed object returned by the 'json' library representing own-profile information.
+   # API calls such as login, getOwnProfile, etc., return user information and statistics.
+   # This method creates a new instance of OwnProfile and fills in the details supplied.
    def initialize(json)
       @unread_count             = json["unread_count"]
       # plurks_users is only present in the getOwnProfile information
@@ -426,6 +485,7 @@ class OwnProfile
      end
    end
 
+   # Returns true if the currently logged-in user has permission to read this user's Plurks.
    def has_read_permission?
      @has_read_permission
    end
