@@ -1,14 +1,52 @@
+# Plurkruby is an implementation of the Plurk API (http://plurk.com/API) in Ruby.
+# The Plurk API is accessed using HTTP and HTTPS GET requests and in one case a POST. Plurkruby uses the Net::HTTP
+# library to interact with the server, allowing better error reporting than was available using OpenURI.
+# Responses from Plurk are in the form of JSON messages and these are processed on receipt using the Ruby JSON library.
+# One approach to implementing an API in Ruby would be to deal with the JSON values returned as JSON objects directly.
+# This is not the approach taken in Plurkruby.  Instead, elements received from the server are translated into
+# native Ruby objects, either in code in the API implementation or in Class initializer methods.
+#
+# Author::    John Messenger
+# Copyright:: Copyright (c) 2010 John Messenger
+# License::   New BSD License
+#
 require 'json'
 require 'net/http'
 require 'net/https'
 
 class PlurkApi
-   attr_reader :meta, :logged_in, :logstream, :unread_count, :unread_all, :unread_my, :unread_private, :unread_responded
+   # true if the login method has been successfully called and its session cookie stored.
+   attr_reader :logged_in
+   # A File stream which if set is used to provide a trace of interactions with the Plurk server.
+   attr_reader :logstream
+   # Following a call to getUnreadCount, this is a hash of the unread counts for the currently logged in user.
+   # Note that Plurk currently limits the unread counts to 200.
+   attr_reader :unread_count
+   # Following a call to getUnreadCount, this is the total number of unread Plurks for this user.
+   attr_reader :unread_all
+   # Following a call to getUnreadCount, this is the count of unread Plurks made by the logged in user.
+   attr_reader :unread_my
+   # Following a call to getUnreadCount, this is the count of the logged-in user's unread private Plurks
+   attr_reader :unread_private
+   # Following a call to getUnreadCount, this is the count of unread Plurks to which the logged-in user has
+   # responded.
+   attr_reader :unread_responded
 
+   # These constants represent the +filter+ parameter values of the timelineGetPlurks method.
    TIMELINEGETPLURKS_ALL = nil
    TIMELINEGETPLURKS_MINE = 'only_user'
    TIMELINEGETPLURKS_PRIVATE = 'only_private'
    TIMELINEGETPLURKS_RESPONDED = 'only_responded'
+
+   # +api_key+::    The API key obtained from http://plurk.com/API
+   # +logstream+::  If a pre-opened stream is passed as a parameter, then requests and responses to the API
+   #                are logged to that stream.
+   # +certpath+::   If a directory name is given, then this will be supplied to Net::HTTP to verify SSL
+   #                certificates.  Note that the behaviour is to ignore peer certification problems.
+   #
+   # Before using the API, a +PlurkApi+ object must be created.  It serves to store the state associated with
+   # the session.  It is worth noting that following a call to +logout+, much of the state becomes invalid.
+   # The methods for accessing the API are defined in this class.
 
    def initialize(api_key, logstream = nil, certpath = nil)
       $debug = 0 if not $debug
@@ -18,10 +56,26 @@ class PlurkApi
       @certpath = certpath
    end
 
+   # If a successful call to +login+ has been made, this method will return +true+.
    def is_logged_in?
       @logged_in
    end
 
+   # +apipath+::     the string from the API documentation which follows '/API'
+   # +paramstr+::    if specified, a string of parameters each in the form '&param=value'
+   # +use_https+::   if specified and true, then HTTPS and SSL are used for the API call.
+   #
+   # This internal method is used by all API accessing methods.  It builds a URI amd uses Net::HTTP to connect
+   # to the 'www.plurk.com/API' service.  In order to support SSL certificate verification, if a certification
+   # path is supplied, it is configured for use.  If a logging stream is active, the request is logged.
+   # If the user has already logged in, the session cookie returned at that time is sent with the request.
+   # The request is sent to the server and the response collected.  If the user is not logged in, any returned
+   # cookie is stored for later use.  The response is logged if a logging stream is active.
+   #
+   # The returned value is parsed as a JSON object, both in the case of a good and bad response code from the
+   # server.  If the server said "400 BAD REQUEST", then the error text is raised as a run-time error.
+   # The parsed JSON object is returned for further processing.
+   private :call_api
    def call_api(apipath, paramstr = '', use_https = false)
       uri = URI::HTTP.build({ :host => 'www.plurk.com', :path => '/API' + apipath,
             :query => 'api_key=' + @api_key + paramstr })
@@ -60,13 +114,19 @@ class PlurkApi
       obj
    end
 
+   # Plurk API call::	/API/Users/login
+   # +username+::	existing Plurk username
+   # +password+::	password for the specified user
+   # +no_data+::	if specified and true, OwnProfile will not be returned
+   #
+   # Log in to Plurk.  Returns an OwnProfile object representing the newly logged-in user.
+   # The session cookie returned is stored for automatic use in subsequent requests.
    def login(username, password, no_data = nil)
       paramstr = '&username=' + username + "&password=" + password 
       paramstr += '&no_data=1' if no_data
       obj = call_api('/Users/login', paramstr, :use_https => true)
       #obj = call_api('/Users/login', paramstr)
       @logged_in = true
-      #@cookie = @meta['set-cookie'].split('; ',2)[0]
       p @cookie if $debug > 2
       if no_data
          nil
@@ -75,28 +135,58 @@ class PlurkApi
       end
    end
 
+   # Plurk API call::	/API/Users/logout
+   # Log out of Plurk
    def logout
       raise "not logged in" unless @logged_in
       call_api('/Users/logout')
+      @logged_in = nil
    end
 
+   # Plurk API call::	/API/Profile/getPublicProfile
+   # +username+::       existing Plurk username
+   #
+   # Fetch the public profile of +username+.  Returns a PublicProfile object.
    def getPublicProfile(username)
       obj = call_api('/Profile/getPublicProfile', '&user_id=' + username)
       PublicProfile.new( obj )
    end
 
+   # Plurk API call::	/API/Timeline/plurkAdd
+   # +content+::	The text of the plurk which is to be created.
+   # +qualifer+::	The "qualifier" of the plurk (e.g., 'says', must be in English)
+   # +limited_to+::	If present, an array of user ids of people to whom this plurk is restricted.
+   #			If set to '[ 0 ]', the plurk is limited to the plurker's friends.
+   # +no_comments+::	If present, limits who can comment on this plurk.  See NOCOMMENTS_COMMENTS,
+   #			NOCOMMENTS_DISABLED and NOCOMMENTS_FRIENDS.
+   # +lang+::		If present, specify the language of this plurk.
    def plurkAdd(content, qualifier, limited_to=nil, no_comments=nil, lang=nil)
       raise "not logged in" unless @logged_in
       paramstr = '&content=' + URI::escape(content) + '&qualifier=' + URI::escape(qualifier)
-      paramstr = paramstr + '&limited_to=' + URI::escape(JSON.generate(limited_to)) if limited_to
+      paramstr += '&limited_to=' + URI::escape(JSON.generate(limited_to)) if limited_to
+      case no_comments
+         when NOCOMMENTS_COMMENTS, NOCOMMENTS_DISABLED, NOCOMMENTS_FRIENDS
+            paramstr += '&no_comments=' + no_comments.to_s
+	 when nil	# nothing
+	 else
+	    raise "Illegal value " + no_comments.to_s + " for no_comments"
+      end
+      paramstr += '&lang=' + lang.to_s if lang
       Plurk.new(call_api('/Timeline/plurkAdd', paramstr))
    end
 
+   # Plurk API call::	/API/Timeline/plurkAdd
+   # +id+::		numerical id of the plurk to be deleted.
+   # Delete the specified plurk.  Requires login.
    def plurkDelete(id)
       raise "not logged in" unless @logged_in
       call_api('/Timeline/plurkDelete', '&plurk_id=' + id.to_s)
    end
 
+   # Plurk API call::	/API/Polling/getUnreadCount
+   # Retrieves and stores the undread counts for the logged in user.  Returns a hash of the values, but these
+   # are typically retrieved using the accessor methods +unread_all+, +unread_my+, +unread_private+
+   # and +unread_responded+.  Requires login.
    def getUnreadCount
       raise "not logged in" unless @logged_in
       @unread_count = call_api('/Polling/getUnreadCount')
@@ -106,6 +196,10 @@ class PlurkApi
       @unread_responded = @unread_count['responded']
    end
 
+   # Plurk API call::	/API/Timeline/getPlurk
+   # +pid+::		numeric id of the plurk to be retrieved.
+   # Returns a pair of values.  First a Plurk object representing the plurk, and second a UserInfo
+   # object representing the user who created it.
    def getPlurk(pid)
       raise "not logged in" unless @logged_in
       # This raises the issue of memory management.  If I create a new UserInfo and Plurk
@@ -117,10 +211,17 @@ class PlurkApi
       [ Plurk.new(obj["plurk"]), UserInfo.new(obj["user"]) ]
    end
 
-   # This is the preferred interface for getting groups of plurks, as it is more efficient in Plurk
+   # Plurk API call::	/API/Polling/getPlurks
+   # +newer_than+::	The offset in time determining which plurks will be returned.  Plurks more recent
+   #                    than this time will be returned.  This parameter can be a Time object, or an integer
+   #			(no. of seconds since epoch), or a string of format "2009-6-12T21:13:24".
+   # +limit+::		If present, limits the number of plurks returned.  If not specified, the server's
+   #			default of 50 plurks maximum will be returned.
+   # This is the preferred interface for getting groups of plurks, as it is more efficient at the server.
+   # It returns a pair of values.  First, an array of Plurk objects which appear to be in time order, and
+   # second, a hash of user-id to UserInfo objects representing the owners of the Plurks.  This makes it
+   # possible to render the Plurks without needing to retrieve additional information about their owners.
    def pollingGetPlurks(newer_than, limit = nil)
-      # newer_than can be a Time object, or an integer (no. of seconds since epoch), or a
-      # string of format "2009-6-12T21:13:24".
       raise "not logged in" unless @logged_in
       if newer_than.is_a? String
          timestr = newer_than
@@ -137,15 +238,28 @@ class PlurkApi
       [ plurks, plurk_users ]
    end
 
+   # Plurk API call::	/API/Timeline/getPlurks
+   # +older_than+::	The offset in time determining which plurks will be returned.  Plurks older
+   #                    than this will be returned.  This parameter can be a Time object, or an integer
+   #			(no. of seconds since epoch), or a string of format "2009-6-12T21:13:24".
+   # +limit+::		If present, limits the number of plurks returned.  If not specified, the server's
+   #			default of 20 plurks maximum will be returned.
+   # +filter+::		If present, limits the plurks returned to only private plurks, responded plurks or
+   #                    the user's own plurks (which currently does not work).  See TIMELINEGETPLURKS_PRIVATE,
+   #			TIMELINEGETPLURKS_RESPONDED and TIMELINEGETPLURKS_MINE.
+   # This alternate interface for getting groups of plurks is discouraged as it is less efficient at the server.
+   # It returns a pair of values.  First, an array of Plurk objects which appear to be in time order, and
+   # second, a hash of user-id to UserInfo objects representing the owners of the Plurks.  This makes it
+   # possible to render the Plurks without needing to retrieve additional information about their owners.
    # This interface includes filtering but is less efficient than the "polling" interface above.
-   def timelineGetPlurks(newer_than, limit = nil, filter = nil)
-      # newer_than can be a Time object, or an integer (no. of seconds since epoch), or a
+   def timelineGetPlurks(older_than, limit = nil, filter = nil)
+      # older_than can be a Time object, or an integer (no. of seconds since epoch), or a
       # string of format "2009-6-12T21:13:24".
       raise "not logged in" unless @logged_in
-      if newer_than.is_a? String
-         timestr = newer_than
+      if older_than.is_a? String
+         timestr = older_than
       else
-	 timestr = Time.at(newer_than.to_i).getutc.strftime("%Y-%m-%dT%H:%M:%S")
+	 timestr = Time.at(older_than.to_i).getutc.strftime("%Y-%m-%dT%H:%M:%S")
       end
       paramstr = '&offset=' + timestr
       paramstr += '&limit=' + limit.to_s if limit
@@ -158,12 +272,15 @@ class PlurkApi
       [ plurks, plurk_users ]
    end
 
+   # Plurk API call::	/API/Responses/get
+   # +plk+::		A Plurk object which is modified by adding the responses, respondeers and counts.
+   # +offset+::		If present, the number of responses to skip before starting to return responses.
+   # This method takes an existing Plurk object and adds to it an array of Response objects (+plk.responses+)
+   # and a hash of UserInfo objects indexed by user-id of the owners of those responses (+plk.friends+).
+   # The modified Plurk is returned.
    def getResponses(plk, offset = 0)
      raise "not logged in" unless @logged_in
      obj = call_api('/Responses/get', '&plurk_id=' + plk.plurk_id.to_s + '&from_response=' + offset.to_s)
-     # Modify the incoming plurk by adding the responses, and the user_info about the responders, to it.
-     # Responses are recorded as though they were plurks.  Maybe Responses and plurks should be a subclass of something else.
-     # Responses are put into an array in the order received.  Friends are put in a hash, indexed by their uid.
      obj['responses'].each { |response| plk.responses << Response.new(response) }
      obj['friends'].each { |uid, frd| plk.friends[uid] = UserInfo.new(frd) }
      plk.response_count = obj['response_count'].to_s; # update the response count in the plurk
