@@ -359,7 +359,7 @@ class PlurkApi
      alerts
    end
 
-   # Plurk API call::	/API/Alerts/getActive
+   # Plurk API call::	/API/Alerts/getHistory
    # Requires login.  Returns an array of historical Alert objects.  Only up to 30 events are available.
    def alertsGetHistory
      raise "not logged in" unless @logged_in
