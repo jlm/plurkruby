@@ -1,3 +1,5 @@
+#= PlurkRuby
+#== Version 0.4.1
 # Plurkruby is an implementation of the Plurk API (http://plurk.com/API) in Ruby.
 # The Plurk API is accessed using HTTP and HTTPS GET requests and in one case a POST. Plurkruby uses the Net::HTTP
 # library to interact with the server, allowing better error reporting than was available using OpenURI.
@@ -11,6 +13,37 @@
 # Author::    John Messenger
 # Copyright:: Copyright (c) 2010 John Messenger
 # License::   New BSD License
+#
+#= Example
+#
+#   require 'rubygems'
+#   require 'plurkruby'
+#
+#   # This is a minimal example of how to use Plurkruby. It retrieves a user's unread counts,
+#   # makes a plurk and a plurk response.
+#
+#   plurk = PlurkApi.new("your-api-key")
+#
+#   loginname = "plurkusername"
+#   password = "plurkpassword"
+#
+#   profile = plurk.login(loginname, password)
+#   puts "#{loginname}'s karma: #{profile.user_info.karma.to_s}"
+#   plurk.getUnreadCount
+#   print "#{loginname}'s unread counts: "
+#   print "All: " + plurk.unread_all.to_s
+#   print " Mine: " + plurk.unread_my.to_s
+#   print " Private: " + plurk.unread_private.to_s
+#   print " Responded: " + plurk.unread_responded.to_s
+#   puts
+#
+#   ### Add a new plurk
+#   newplk = plurk.plurkAdd("testing the plurkruby Plurk API", "is")
+#   puts "Plurked with id: #{newplk.plurk_id}"
+#
+#   ### Add a response to a specified plurk
+#   response = plurk.responseAdd(newplk, "responding to that plurk!", "likes")
+#   puts "Responded with id: #{response.resp_id.to_s}"
 #
 require 'json'
 require 'net/http'
@@ -491,8 +524,15 @@ class OwnProfile
    end
 end
 
+# The getPublicProfile method returns information about a Plurk user, comprising similar information contained
+# in the OwnProfile with additional information relating to the relationship between the logged-in user and the
+# user being required.
 class PublicProfile < OwnProfile
 
+   # json::		parsed object returned by the 'json' library representing public-profile information.
+   # API calls such as getPublicProfile, etc., return user information and statistics.
+   # This method creates a new instance of PublicProfile and fills in the details supplied.  It is defined
+   # as a subclass of OwnProfile.
   def initialize(json)
     super                       # invoke the superclass method of the name name with the
                                 # same parameters
@@ -506,22 +546,46 @@ class PublicProfile < OwnProfile
     end
   end
 
+  # Invoked on a PublicProfile object, returns true if the logged-in user is friends with the user whose public profile
+  # this is.
   def are_friends?
     @are_friends
   end
 
+  # Invoked on a PublicProfile object, returns true if the logged-in user is following the timeline of the user
+  # whose public profile this is.
   def is_following?
     @is_following
   end
 
+  # Invoked on a PublicProfile object, returns true if the logged-in user is a fan of the user
+  # whose public profile this is.
   def is_fan?
     @is_fan
   end
 end
 
+# This class is the basis of the representation of both Plurks and Responses.  It stores the common elements of those
+# classes.  
 class PlurkBase
-   attr_reader :plurk_id, :content_raw, :qualifier, :content, :lang, :user_id, :posted
+   # The id of the Plurk to which this object relates.
+   attr_reader :plurk_id
+   # The textual content of this Plurk or Response, as entered by the user originally.  Useful for editing Plurks.
+   attr_reader :content_raw
+   # The qualifier of this Plurk or Response; e.g., "says".  Must be in English.
+   attr_reader :qualifier
+   # The formatted content of this Plurk or Response, containing for example expanded emoticon paths and links.
+   attr_reader :content
+   # The language of this Plurk or Response, for example "es".
+   attr_reader :lang
+   # The id of the user whose timeline this Plurk resides in.  What does it mean in a Response?
+   attr_reader :user_id
+   # The date and time that this Plurk was created.
+   attr_reader :posted
 
+   # json::		parsed object returned by the 'json' library representing Plurk/Response information.
+   # API calls such as getPlurk, getPlurks and getResponses return information relating to Plurks and Responses.
+   # This method creates a new instance of PlurkBase and fills in the details supplied.
    def initialize(json)
       @plurk_id                 = json["plurk_id"]
       @content_raw              = json["content_raw"]
@@ -538,48 +602,57 @@ class PlurkBase
      end
    end
 
-   # values for @no_comments:
-   NOCOMMENTS_COMMENTS = 0
-   NOCOMMENTS_DISABLED = 1
-   NOCOMMENTS_FRIENDS = 2
-
-   # values for @plurk_type:
-   PLURKTYPE_PUBLIC = 0
-   PLURKTYPE_PRIVATE = 1
-   PLURKTYPE_PUBLIC_RESPONDED = 2
-   PLURKTYPE_PRIVATE_RESPONDED = 3
-
-   # values for @is_unread
+   # values for @is_unread:
    ISUNREAD_READ = 0
    ISUNREAD_UNREAD = 1
    ISUNREAD_MUTED = 2
 
+   # Invoked on a Plurk or Response, returns true if it has not been read by the logged-in user. (Is this true?)
    def is_unread?
       @is_unread == ISUNREAD_UNREAD
    end
 
+   # Invoked on a Plurk, returns true if that Plurk has been muted by the logged-in user.
    def is_muted?
       @is_unread == ISUNREAD_MUTED
    end
 
-   def is_private?
-      @limited_to
-   end
-
-   def is_favorite?
-      @favorite                 # Plurk returns this as true or false, and it seems to work
-   end
-
+   # Invoked on a Plurk or Response, this method returns a string useable to print it simply.  Note that this
+   # method uses content_raw and so it may not be ideal for a graphical interface.
    def to_s
       str = self.qualifier.to_s + " " + self.content_raw
       str
    end
 end
 
+# This class represents a single Plurk.  It is a subtype of PlurkBase.
 class Plurk < PlurkBase
-   attr_reader :limited_to, :no_comments, :plurk_type, :owner_id, :responses_seen, :favorite
-   attr_accessor :responses, :response_count, :friends # these are filled in by getResponses
+   # An array of user ids to which visibility of this Plurk is limited.  If '[ 0 ]' then visibility is limited to
+   # the Plurker's friends.
+   attr_reader :limited_to
+   # If commenting is limited, this field specifies the limitation.  See NOCOMMENTS_COMMENTS, NOCOMMENTS_DISABLED,
+   # NOCOMMENTS_FRIENDS.
+   attr_reader :no_comments
+   # Specifies whether the Plurk is public or private, and whether it has been responded to by the logged-in user.  See
+   # PLURKTYPE_PUBLIC, PLURKTYPE_PRIVATE, PLURKTYPE_PUBLIC_RESPONDED, and PLURKTYPE_PRIVATE_RESPONDED.
+   attr_reader :plurk_type
+   # The user id of the user who created this Plurk.
+   attr_reader :owner_id
+   # How many of the responses has the logged-in user retrieved already? (Automatically updated by Plurk)
+   attr_reader :responses_seen
+   # True if the logged-in user has "liked" this plurk.
+   attr_reader :favorite
+   # An array of Responses to this plurk.  This read-write attribute's value is added by getResponses.
+   attr_accessor :responses
+   # A count of how many responses there are.  This read-write attribute's value is added by getResponses.
+   attr_reader :response_count
+   # A hash of the UserInfo objects of the authors of the Responses to this Plurk, indexed by user id.
+   # This read-write attribute's value is added by getResponses.
+   attr_reader :friends
 
+   # json::		parsed object returned by the 'json' library representing Plurk information.
+   # API calls such as getPlurk and getPlurks return information relating to Plurks.
+   # This method creates a new instance of Plurk and fills in the details supplied.
    def initialize(json)
       super
 
@@ -598,7 +671,30 @@ class Plurk < PlurkBase
      end
    end
 
-   # The to_s method augments the base class' method by invoking it with super.
+   # values for @no_comments:
+   NOCOMMENTS_COMMENTS = 0
+   NOCOMMENTS_DISABLED = 1
+   NOCOMMENTS_FRIENDS = 2
+
+   # values for @plurk_type:
+   PLURKTYPE_PUBLIC = 0
+   PLURKTYPE_PRIVATE = 1
+   PLURKTYPE_PUBLIC_RESPONDED = 2
+   PLURKTYPE_PRIVATE_RESPONDED = 3
+
+   # Invoked on a Plurk, returns true if visibility is limited rather than being public.
+   def is_private?
+      @limited_to
+   end
+
+   # Invoked on a Plurk, returns true if the logged-in user has "liked" this Plurk.
+   def is_favorite?
+      @favorite                 # Plurk returns this as true or false, and it seems to work
+   end
+
+   # Returns a string comprising the qualifier, the raw content and some markers relating to the Plurk,
+   # namely [a/b] where a is the number of responses seen and b is the total number of responses,
+   # [unread] if the Plurk is unread by the logged-in user and [PP] if this is a private Plurk.
    def to_s
       str = super
 
@@ -609,9 +705,14 @@ class Plurk < PlurkBase
    end
 end
 
+# This class represents a single plurk response.  It is a subtype of PlurkBase.
 class Response < PlurkBase
+   # The id of this response.
    attr_reader :resp_id
 
+   # json::		parsed object returned by the 'json' library representing Response information.
+   # Methods such as getResponses return information about the responses to a Plurk. This method creates a new
+   # object to hold that information.
    def initialize(json)
       super
 
@@ -627,8 +728,22 @@ end
 ### Alerts
 ###
 
+# This class represents a single alert.  Alerts are used to communicate the process of adding friends.
 class Alert
-   attr_reader :type, :user, :posted
+   # The type of Alert.  Can be "friendship_request" indicating that someone else wishes to become a friend
+   # of the logged-in user, "friendship_pending" indicating to a user who has made a friend request that the request
+   # has not yet been responded to, "new_fan" indicating that a user has become a fan of the logged-in user, 
+   # "friendship_accepted" indicating that the logged-in user's request has been accepted or "new_friend" which has a
+   # meaning, somewhere, surely.
+   attr_reader :type
+   # The user (represented by a UserInfo object) to whom this alert relates.
+   attr_reader :user
+   # The date when this alert was created.
+   attr_reader :posted
+
+   # json::		parsed object returned by the 'json' library representing Alert information.
+   # Methods such as getActive and getAlertHistory return information about Alerts. This method creates a new
+   # object to hold information on an individual Alert.
    def initialize(json)
       @type                     = json["type"]
       @posted                   = json["posted"]
@@ -647,6 +762,7 @@ class Alert
       )
    end
 
+   # Returns a string representing an Alert, of the form "Username: friendship_accepted at DateAndTime".
    def to_s
       self.user.to_s + ": " + self.type + " at " + self.posted
    end
