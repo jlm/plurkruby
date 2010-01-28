@@ -1,5 +1,5 @@
 #= PlurkRuby
-#== Version 0.4.1
+#== Version 0.5
 # Plurkruby is an implementation of the Plurk API (http://plurk.com/API) in Ruby.
 # The Plurk API is accessed using HTTP and HTTPS GET requests and in one case a POST. Plurkruby uses the Net::HTTP
 # library to interact with the server, allowing better error reporting than was available using OpenURI.
