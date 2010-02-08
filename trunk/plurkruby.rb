@@ -200,7 +200,7 @@ class PlurkApi
       paramstr = '&content=' + URI::escape(content) + '&qualifier=' + URI::escape(qualifier)
       paramstr += '&limited_to=' + URI::escape(JSON.generate(limited_to)) if limited_to
       case no_comments
-         when NOCOMMENTS_COMMENTS, NOCOMMENTS_DISABLED, NOCOMMENTS_FRIENDS
+         when Plurk::NOCOMMENTS_COMMENTS, Plurk::NOCOMMENTS_DISABLED, Plurk::NOCOMMENTS_FRIENDS
             paramstr += '&no_comments=' + no_comments.to_s
 	 when nil	# nothing
 	 else
