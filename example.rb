@@ -24,6 +24,7 @@ opts = GetoptLong.new(
   [ '--password',         GetoptLong::REQUIRED_ARGUMENT ],
   [ '--testuser',   '-t', GetoptLong::NO_ARGUMENT ],
   [ '--nodata',           GetoptLong::NO_ARGUMENT ],
+  [ '--register',         GetoptLong::NO_ARGUMENT ],
   [ '--printplurks',      GetoptLong::NO_ARGUMENT ],
   [ '--getplurks',        GetoptLong::REQUIRED_ARGUMENT ],
   [ '--outfile',    '-o', GetoptLong::REQUIRED_ARGUMENT ],
@@ -40,6 +41,10 @@ opts = GetoptLong.new(
   [ '--not',        '-n', GetoptLong::NO_ARGUMENT ],
   [ '--logout',           GetoptLong::NO_ARGUMENT ],
   [ '--printuri',   '-v', GetoptLong::NO_ARGUMENT ],
+  [ '--fullname',         GetoptLong::REQUIRED_ARGUMENT ],
+  [ '--gender',           GetoptLong::REQUIRED_ARGUMENT ],
+  [ '--dateofbirth',      GetoptLong::REQUIRED_ARGUMENT ],
+  [ '--email',            GetoptLong::REQUIRED_ARGUMENT ],
   [ '--debug',      '-d', GetoptLong::NO_ARGUMENT ]
 )
 
@@ -60,9 +65,14 @@ responded = nil
 deleteplurk = nil
 alerthistory = nil
 nodata = nil
+register = nil
 printplurks = nil
 getplurks = nil
 logout = nil
+full_name = nil
+gender = nil
+date_of_birth = nil
+email = nil
 $bluffing = nil
 $debug = 0
 $printuri = nil
@@ -84,6 +94,8 @@ opts.each do |opt, arg|
       password = "testPassword"
     when '--nodata'
       nodata = true
+    when '--register'
+      register = true
     when '--printplurks'
       printplurks = true
     when '--getplurks'
@@ -114,11 +126,22 @@ opts.each do |opt, arg|
       outfilename = arg.to_s
     when '--logout'
       logout = true
+    when '--fullname'
+      full_name = arg.to_s
+    when '--gender'
+      gender = arg.to_s
+    when '--dateofbirth'
+      date_of_birth = arg.to_s
+    when '--email'
+      email = arg.to_s
   end
 end
 
+if register
+  loginname = username
+end
 
-if do_login and loginname and not password
+if (do_login and loginname and not password) or (register and not password)
   password = get_password("Enter password for #{loginname}: ")
 end
 
@@ -133,6 +156,16 @@ logfile = outfilename ? File.new(outfilename, 'w') : nil
 ### Initialise the API
 ###
 plurk = PlurkApi.new($api_key, logfile)           # logfile can be omitted if not required
+
+###
+### Register a new Plurk user
+###
+if register
+  puts "Registering new plurk user #{loginname}"
+  userinfo = plurk.register(loginname, full_name, password, gender, date_of_birth, email)
+  puts "#{loginname}'s karma: #{userinfo.karma.to_s}"
+  do_login = true
+end
 
 ###
 ### Login and retrieve some basic information
