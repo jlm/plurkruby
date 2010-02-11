@@ -149,6 +149,34 @@ class PlurkApi
    end
    private :call_api
 
+   # Plurk API call::	/API/Users/register
+   # +nick_name+::	desired Plurk username (must not already exist, and must be 3 or more characters in length)
+   # +full_name+::	Full name of user (must not be empty)
+   # +password+::	password for the specified user
+   # +gender+::		must be "male" or "female"
+   # +date_of_birth+::	User's date of birth, in the format YYYY-MM-DD
+   # +email+::		User's email address, if present
+   #
+   # Register a new Plurk user.
+   # Returns a UserInfo object representing the new user.  It does not log the user in.
+   def register(nick_name, full_name, password, gender, date_of_birth, email = nil)
+      if (!date_of_birth) or !(date_of_birth =~ /\d\d\d\d-\d\d-\d\d/)
+	  raise "Date of birth must be provided in format YYYY-MM-DD"
+      end
+      if !(gender =~ /male/ or gender =~ /female/)
+	  raise "Gender must be specified as male or female"
+      end
+      raise "Full name must be specified" if ! full_name
+      paramstr = '&nick_name=' + URI::escape(nick_name)
+      paramstr += "&full_name=" + URI::escape(full_name)
+      paramstr += "&password=" + URI::escape(password)
+      paramstr += "&gender=" + gender 
+      paramstr += "&date_of_birth=" + date_of_birth 
+      paramstr += '&email=' + URI::escape(email) if email
+      obj = call_api('/Users/register', paramstr, :use_https => true)
+      UserInfo.new(obj)
+   end
+
    # Plurk API call::	/API/Users/login
    # +username+::	existing Plurk username
    # +password+::	password for the specified user
